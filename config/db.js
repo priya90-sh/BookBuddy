@@ -23,7 +23,7 @@ const connectDB = async () => {
     cached.promise = mongoose
       .connect(process.env.MONGO_URI)
       .then((mongooseInstance) => {
-        console.log("MongoDB Connected Successfully");
+        console.log("MongoDB Atlas Connected Successfully");
         return mongooseInstance;
       })
       .catch((error) => {

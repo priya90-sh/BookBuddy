@@ -3,36 +3,33 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const http = require("http");
-const { Server } = require("socket.io");
 
 const connectDB = require("./config/db");
-const setupSocket = require("./socket");
 
 const app = express();
 
-// FRONTEND URLS ALLOWED TO ACCESS BACKEND
+// ALLOWED FRONTEND ORIGINS
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   ...(process.env.FRONTEND_URL || "")
     .split(",")
-    .map(url => url.trim())
+    .map(url => url.trim().replace(/\/$/, ""))
     .filter(Boolean)
 ];
 
 // CORS CONFIGURATION
-const corsOptions = {
+app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
-    return callback(new Error("Not allowed by CORS: " + origin));
+    return callback(
+      new Error("Not allowed by CORS: " + origin)
+    );
   },
-
   credentials: true,
-
   methods: [
     "GET",
     "POST",
@@ -41,16 +38,13 @@ const corsOptions = {
     "DELETE",
     "OPTIONS"
   ],
-
   allowedHeaders: [
     "Content-Type",
     "Authorization"
   ]
-};
+}));
 
-// MIDDLEWARES
-app.use(cors(corsOptions));
-
+// BODY PARSERS
 app.use(express.json({ limit: "10mb" }));
 
 app.use(express.urlencoded({
@@ -66,12 +60,12 @@ app.get("/", (req, res) => {
   });
 });
 
-// HEALTH CHECK ROUTE
+// HEALTH CHECK
 app.get("/api/health", async (req, res) => {
   try {
     await connectDB();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "BookBuddy Backend is Running Successfully!",
       database: "Connected",
@@ -79,9 +73,9 @@ app.get("/api/health", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Health Check Error:", error.message);
+    console.error("Health Check Error:", error);
 
-    res.status(503).json({
+    return res.status(503).json({
       success: false,
       message: "Backend is running but database connection failed",
       database: "Disconnected"
@@ -89,13 +83,14 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// CONNECT DATABASE BEFORE API REQUESTS
+// DATABASE MIDDLEWARE
 app.use(async (req, res, next) => {
   try {
     await connectDB();
     next();
+
   } catch (error) {
-    console.error("Database Connection Error:", error.message);
+    console.error("Database Error:", error);
 
     res.status(503).json({
       success: false,
@@ -104,30 +99,21 @@ app.use(async (req, res, next) => {
   }
 });
 
-// EXISTING API ROUTES
+// API ROUTES
 app.use("/api/users", require("./routes/authRoutes"));
-
 app.use("/api/contact", require("./routes/contact"));
-
 app.use("/api/books", require("./routes/bookRoutes"));
-
 app.use("/api/chat", require("./routes/chatRoutes"));
 
-// HTTP SERVER
-const server = http.createServer(app);
-
-// SOCKET.IO CONFIGURATION
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true
-  }
+// 404 HANDLER
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API route not found"
+  });
 });
 
-setupSocket(io);
-
-// ERROR HANDLING
+// ERROR HANDLER
 app.use((err, req, res, next) => {
   console.error("Server Error:", err.message);
 
@@ -137,12 +123,30 @@ app.use((err, req, res, next) => {
   });
 });
 
-// START SERVER
-const PORT = process.env.PORT || 3001;
+// LOCAL DEVELOPMENT ONLY
+if (require.main === module) {
+  const http = require("http");
+  const { Server } = require("socket.io");
+  const setupSocket = require("./socket");
 
-server.listen(PORT, () => {
-  console.log(`BookBuddy running on port ${PORT}`);
-});
+  const server = http.createServer(app);
 
-// EXPORT SERVER FOR VERCEL
-module.exports = server;
+  const io = new Server(server, {
+    cors: {
+      origin: allowedOrigins,
+      methods: ["GET", "POST"],
+      credentials: true
+    }
+  });
+
+  setupSocket(io);
+
+  const PORT = process.env.PORT || 3001;
+
+  server.listen(PORT, () => {
+    console.log(`BookBuddy running on port ${PORT}`);
+  });
+}
+
+// VERCEL EXPORT
+module.exports = app;
