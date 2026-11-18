@@ -10,7 +10,7 @@ const app = express();
 
 // ALLOWED FRONTEND ORIGINS
 const allowedOrigins = [
-  "https://book-buddy-frontend-bhp6sjco8-priya-6416.vercel.app",
+  "https://book-buddy-frontend-new.vercel.app",
   "http://localhost:5173",
   ...(process.env.FRONTEND_URL || "")
     .split(",")
